@@ -32,21 +32,30 @@ class CreateDirectoryJob(Job):
 
 
 class CopyFileJob(Job):
-    def __init__(self, sourceFile: File, destFile: pathlib.Path, symlink: bool):
+    def __init__(self, sourceFile: File, destFile: pathlib.Path):
         self.sourceFile = sourceFile
         self.destFile = destFile
-        self.symlink = symlink
 
     def run(self):
-        if self.symlink:
-            logging.debug(f"Trying to create symlink {self.destFile} pointing to {self.sourceFile.location}")
-            createSymlink(self.destFile, self.sourceFile.location)
-        else:
-            logging.debug(f"Trying to {self}")
-            shutil.copy2(self.sourceFile.location, self.destFile)
+        logging.debug(f"Trying to {self}")
+        shutil.copy2(self.sourceFile.location, self.destFile)
 
     def __str__(self):
         return f"Copy {self.sourceFile.location} -> {self.destFile}"
+
+
+class MoveFileJob(Job):
+    def __init__(self, sourceFile: File, destFile: pathlib.Path):
+        self.sourceFile = sourceFile
+        self.destFile = destFile
+
+    def run(self):
+        logging.debug(f"Trying to {self}")
+        shutil.move(self.sourceFile.location, self.destFile)
+        self.sourceFile.location = self.destFile
+
+    def __str__(self):
+        return f"Move {self.sourceFile.location} -> {self.destFile}"
 
 
 class JobCreator:
@@ -91,8 +100,9 @@ class JobCreator:
                     # We are the first file with this name
                     nameToFile[nameAndExtension] = file
 
-                    jobs.append(CopyFileJob(file, targetDir / nameAndExtension, config.dummyRun))
-
+                    jobType = MoveFileJob if file.alreadyExisted else CopyFileJob
+                    # If the file is already result of PhotoDistributor, we probably want to move it
+                    jobs.append(jobType(file, targetDir / nameAndExtension))
                     written = True
                 else:
                     otherFileWithSameName = nameToFile[nameAndExtension]
@@ -103,15 +113,13 @@ class JobCreator:
                             # Exactly same files => do not write anything new at all
                             break
 
-                        folder = config.destinationFolder / config.WEIRD_FILES_DIR_NAME / str(self.collisionCounter)
-                        self.collisionCounter += 1
+                        folder = config.destinationFolder / config.WEIRD_FILES_DIR_NAME
 
                         jobs.append(CreateDirectoryJob(folder))
                         jobs.append(CopyFileJob(otherFileWithSameName,
-                                                folder / ("chosen_" + otherFileWithSameName.location.name),
-                                                True))
-                        jobs.append(CopyFileJob(file, folder / file.location.name, True))
-
+                                                folder / (f"chosen_{self.collisionCounter}")))
+                        jobs.append(CopyFileJob(file, folder / f"{self.collisionCounter}"))
+                        self.collisionCounter += 1
                         written = True
                     else:
                         # "file" and "other file with same name" are different.
@@ -165,3 +173,9 @@ class JobRunner:
     def runJobs(self):
         for job in self.jobs:
             job.run()
+
+    def cleanUp(self):
+        for directory in config.destinationFolder.glob(f"{config.destinationFolder}/**"):
+            # Lists all directories under destination folder
+            if not any(directory.iterdir()):
+                directory.rmdir()

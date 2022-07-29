@@ -13,13 +13,22 @@ from configuration import config
 class Processer:
 
     def run(self):
+        if not (config.destinationFolder / config.WEIRD_FILES_DIR_NAME).is_dir() and \
+                any(config.destinationFolder.iterdir()):
+            logging.critical(
+                "Destination directory is neither empty nor a result of a run of PhotoDistributor.\n"
+                "Exiting"
+            )
+            return
+
         jobCreator = JobCreator(self.listFiles())
         jobRunner = JobRunner(jobCreator.createJobs())
         jobRunner.runJobs()
+        jobRunner.cleanUp()
 
     def listFiles(self) -> List[File]:
         filesListing = []
-        for sourceDirectory in config.sourceFolders:
+        for sourceDirectory in config.sourceFolders + [config.destinationFolder]:
             sourceDirectory = pathlib.Path(sourceDirectory)
             filesListing.extend(
                 filter(
@@ -63,7 +72,6 @@ class GUI:
         destinationButton = Button(text="Конечная папка", height=5, width=50,
                                    command=self.setDestination)
         destinationButton.pack()
-        self.dummyRunButton = self.CheckButton(None, "Холостой запуск (создать только ссылки)")
         copyButton = Button(text='Выполнить!', height=5, width=50,
                             command=self.execute)
         copyButton.pack()
@@ -83,7 +91,6 @@ class GUI:
     def execute(self):
         answer = messagebox.askquestion(title='Уверены?',
                                         message="Хотите продолжить?")
-        config.dummyRun = self.dummyRunButton.var.get()
         if answer == 'yes':
             self.gui.destroy()
             Processer().run()
@@ -111,10 +118,9 @@ def test():
     pathlib.Path("./tmp").mkdir(exist_ok=True)
     config.sourceFolders = [pathlib.Path("./inputDir")]
     config.destinationFolder = pathlib.Path("./tmp")
-    config.dummyRun = True
     Processer().run()
 
 
 if __name__ == '__main__':
-    # test()
-    GUI()
+    test()
+    # GUI()

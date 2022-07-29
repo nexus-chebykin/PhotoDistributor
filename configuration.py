@@ -26,7 +26,6 @@ class Configuration:
 
     sourceFolders: List[pathlib.Path] = []
     destinationFolder: pathlib.Path
-    dummyRun = False
 
     def __init__(self):
         pass

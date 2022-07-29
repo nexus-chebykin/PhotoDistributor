@@ -5,7 +5,7 @@ import os
 import pathlib
 import logging
 import exifread
-import configuration
+from configuration import config
 
 
 
@@ -26,12 +26,13 @@ def createSymlink(pointingFrom: pathlib.Path, pointingTo: pathlib.Path):
     os.symlink(pointingTo.absolute(), pointingFrom.absolute(), target_is_directory=False)
 
 class File:
-    location: pathlib.Path
+    location: pathlib.Path # Current location of the original file: e.g. after moving the file it will change
     creationDate: datetime  # Might not actually be creation date
+    alreadyExisted: bool # Whether this file was already in the target directory
 
     def __init__(self, location: Union[str, bytes, os.PathLike]):
         self.location = pathlib.Path(location)
-
+        self.alreadyExisted = self.location.is_relative_to(config.destinationFolder)
         try:
             tags = exifread.process_file(open(self.location, 'rb'))
             datetimeTags = ['EXIF DateTimeOriginal', 'Image DateTimeOriginal']
